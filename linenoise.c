@@ -110,6 +110,7 @@
 #define LINENOISE_MAX_LINE 4096
 static char *unsupported_term[] = {"dumb","cons25",NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseCompletionCallback *spaceCompletionCallback = NULL;
 
 static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0; /* For atexit() function to check if restore is needed*/
@@ -241,12 +242,20 @@ static void freeCompletions(linenoiseCompletions *lc) {
  * 
  * The state of the editing is encapsulated into the pointed linenoiseState
  * structure as described in the structure definition. */
-static int completeLine(struct linenoiseState *ls) {
+static int completeLine(char completeChar, struct linenoiseState *ls) {
     linenoiseCompletions lc = { 0, NULL };
     int nread, nwritten;
     char c = 0;
 
-    completionCallback(ls->buf,&lc);
+    switch (completeChar)
+    {
+        case 9: /* tab */
+            completionCallback(ls->buf,&lc);
+            break;
+        case 32: /* space */
+            spaceCompletionCallback(ls->buf,&lc);
+            break;
+    }
     if (lc.len == 0) {
         linenoiseBeep();
     } else {
@@ -283,6 +292,10 @@ static int completeLine(struct linenoiseState *ls) {
                     if (i < lc.len) refreshLine(ls);
                     stop = 1;
                     break;
+                case 32: /* space */
+                    i = (i+1) % (lc.len+1);
+                    if (i == lc.len) linenoiseBeep();
+                    break;
                 default:
                     /* Update buffer and return */
                     if (i < lc.len) {
@@ -303,6 +316,12 @@ static int completeLine(struct linenoiseState *ls) {
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
     completionCallback = fn;
 }
+
+/* Register a callback function to be called for space-completion. */
+void linenoiseSetSpaceCompletionCallback(linenoiseCompletionCallback *fn) {
+    spaceCompletionCallback = fn;
+}
+
 
 /* This function is used by the callback function registered by the user
  * in order to add completion options given the input string when the
@@ -613,12 +632,20 @@ static int linenoiseEdit(int fd, char *buf, size_t buflen, const char *prompt)
          * there was an error reading from fd. Otherwise it will return the
          * character that should be handled next. */
         if (c == 9 && completionCallback != NULL) {
-            c = completeLine(&l);
+            c = completeLine(c, &l);
             /* Return on errors */
             if (c < 0) return l.len;
             /* Read next character when 0 */
             if (c == 0) continue;
         }
+        if (c == 32 && spaceCompletionCallback != NULL) {
+            c = completeLine(c, &l);
+            /* Return on errors */
+            if (c < 0) return l.len;
+            /* Read next character when 0 */
+            if (c == 0) continue;
+        }
+
 
         switch(c) {
         case 13:    /* enter */
