@@ -45,6 +45,7 @@ typedef struct linenoiseCompletions {
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback *);
 void linenoiseSetSpaceCompletionCallback(linenoiseCompletionCallback *fn);
+void linenoiseSetReverseSpaceCompletionCallback(linenoiseCompletionCallback *fn);
 void linenoiseAddCompletion(linenoiseCompletions *, char *);
 
 char *linenoise(const char *prompt);

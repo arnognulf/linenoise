@@ -111,6 +111,7 @@
 static char *unsupported_term[] = {"dumb","cons25",NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 static linenoiseCompletionCallback *spaceCompletionCallback = NULL;
+static linenoiseCompletionCallback *reverseSpaceCompletionCallback = NULL;
 
 static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0; /* For atexit() function to check if restore is needed*/
@@ -118,6 +119,8 @@ static int mlmode = 0;  /* Multi line mode. Default is single line. */
 static int atexit_registered = 0; /* Register atexit just 1 time. */
 static int history_max_len = LINENOISE_DEFAULT_HISTORY_MAX_LEN;
 static int history_len = 0;
+static int space_mode = 0;
+static int space_count = 0;
 char **history = NULL;
 
 /* The linenoiseState structure represents the state during line editing.
@@ -254,7 +257,10 @@ static int completeLine(char completeChar, struct linenoiseState *ls) {
             completionCallback(ls->buf,&lc);
             break;
         case 32: /* space */
-            spaceCompletionCallback(ls->buf,&lc);
+            if (space_mode == 0)
+		    spaceCompletionCallback(ls->buf,&lc);
+            if (space_mode == 1)
+		    reverseSpaceCompletionCallback(ls->buf,&lc);
             break;
     }
     if (lc.len == 0) {
@@ -294,10 +300,18 @@ static int completeLine(char completeChar, struct linenoiseState *ls) {
                     stop = 1;
                     break;
                 case 32: /* space */
+                    //fprintf(stderr, "SPACE1\n");
+		    //space_count = (space_count + 1) % 2;
+                    space_count = (space_count + 1) % 2;
+                    if (space_count == 1)
+			    space_mode = !space_mode;
+		    fprintf(stderr, "space_count: %d, space_mode: %d\n", space_count, space_mode);
+
                     i = (i+1) % (lc.len+1);
                     if (i == lc.len) linenoiseBeep();
                     break;
                 default:
+                    space_count = 0;
                     /* Update buffer and return */
                     if (i < lc.len) {
                         nwritten = snprintf(ls->buf,ls->buflen,"%s",lc.cvec[i]);
@@ -322,6 +336,12 @@ void linenoiseSetCompletionCallback(linenoiseCompletionCallback *fn) {
 void linenoiseSetSpaceCompletionCallback(linenoiseCompletionCallback *fn) {
     spaceCompletionCallback = fn;
 }
+
+/* Register a callback function to be called for space-completion. */
+void linenoiseSetReverseSpaceCompletionCallback(linenoiseCompletionCallback *fn) {
+    reverseSpaceCompletionCallback = fn;
+}
+
 
 
 /* This function is used by the callback function registered by the user
@@ -639,14 +659,13 @@ static int linenoiseEdit(int fd, char *buf, size_t buflen, const char *prompt)
             /* Read next character when 0 */
             if (c == 0) continue;
         }
-        if (c == 32 && spaceCompletionCallback != NULL) {
+        else if (c == 32 && spaceCompletionCallback != NULL) {
             c = completeLine(c, &l);
             /* Return on errors */
             if (c < 0) return l.len;
             /* Read next character when 0 */
             if (c == 0) continue;
         }
-
 
         switch(c) {
         case 13:    /* enter */
@@ -780,6 +799,8 @@ static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
  * editing function or uses dummy fgets() so that you will be able to type
  * something even in the most desperate of the conditions. */
 char *linenoise(const char *prompt) {
+    space_count = 0;
+    space_mode = 0;
     char buf[LINENOISE_MAX_LINE];
     int count;
 
