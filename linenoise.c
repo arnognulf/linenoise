@@ -300,12 +300,9 @@ static int completeLine(char completeChar, struct linenoiseState *ls) {
                     stop = 1;
                     break;
                 case 32: /* space */
-                    //fprintf(stderr, "SPACE1\n");
-		    //space_count = (space_count + 1) % 2;
                     space_count = (space_count + 1) % 2;
                     if (space_count == 1)
 			    space_mode = !space_mode;
-		    fprintf(stderr, "space_count: %d, space_mode: %d\n", space_count, space_mode);
 
                     i = (i+1) % (lc.len+1);
                     if (i == lc.len) linenoiseBeep();
