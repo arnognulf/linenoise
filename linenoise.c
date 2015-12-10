@@ -105,6 +105,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include "linenoise.h"
+#include <ctype.h>
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
@@ -352,7 +353,28 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, char *str) {
     lc->cvec = realloc(lc->cvec,sizeof(char*)*(lc->len+1));
     lc->cvec[lc->len++] = copy;
 }
-
+static size_t xstrlen(const char *p_str)
+{
+	size_t len = 0;
+	size_t i = 0;
+	while (p_str[i] != '\0')
+	{
+	     if (p_str[i] == '\033' && p_str[i+1] == '[')
+             {
+		 i+=2;
+		 while (p_str[i] != '\0' && !isalpha(p_str[i]))
+		     i++;
+		 if (isalpha(p_str[i]))
+	             i++;
+	     }
+             else
+	     {
+	         len++;
+	         i++;
+	     }
+        }
+	return len;
+}
 /* =========================== Line editing ================================= */
 
 /* Single line low level line refresh.
@@ -361,7 +383,7 @@ void linenoiseAddCompletion(linenoiseCompletions *lc, char *str) {
  * cursor position, and number of columns of the terminal. */
 static void refreshSingleLine(struct linenoiseState *l) {
     char seq[64];
-    size_t plen = strlen(l->prompt);
+    size_t plen = xstrlen(l->prompt);
     int fd = l->fd;
     char *buf = l->buf;
     size_t len = l->len;
@@ -381,6 +403,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
     if (write(fd,seq,strlen(seq)) == -1) return;
     /* Write the prompt and the current buffer content */
     if (write(fd,l->prompt,strlen(l->prompt)) == -1) return;
+    //if (write(fd,"\x1b[8G", 4) == -1) return; // TODO: added
     if (write(fd,buf,len) == -1) return;
     /* Erase to right */
     snprintf(seq,64,"\x1b[0K");
@@ -396,7 +419,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
  * cursor position, and number of columns of the terminal. */
 static void refreshMultiLine(struct linenoiseState *l) {
     char seq[64];
-    int plen = strlen(l->prompt);
+    int plen = xstrlen(l->prompt);
     int rows = (plen+l->len+l->cols-1)/l->cols; /* rows used by current buf. */
     int rpos = (plen+l->oldpos+l->cols)/l->cols; /* cursor relative row. */
     int rpos2; /* rpos after refresh. */
@@ -622,7 +645,7 @@ static int linenoiseEdit(int fd, char *buf, size_t buflen, const char *prompt)
     l.buf = buf;
     l.buflen = buflen;
     l.prompt = prompt;
-    l.plen = strlen(prompt);
+    l.plen = xstrlen(prompt);
     l.oldpos = l.pos = 0;
     l.len = 0;
     l.cols = getColumns();
@@ -637,7 +660,7 @@ static int linenoiseEdit(int fd, char *buf, size_t buflen, const char *prompt)
      * initially is just an empty string. */
     linenoiseHistoryAdd("");
     
-    if (write(fd,prompt,l.plen) == -1) return -1;
+    if (write(fd,prompt,strlen(l.prompt)) == -1) return -1;
     while(1) {
         char c;
         int nread;
